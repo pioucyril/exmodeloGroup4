@@ -1,14 +1,12 @@
-~~~~scala
 val hRs1 = Val[Double]
 val hIp1 = Val[Double]
 val hRs2 = Val[Double]
 val hIp2 = Val[Double]
 
-
 val seed = Val[Long]
+
 val rescuedDynamic = Val[Array[Int]]
 val zombifiedDynamic = Val[Array[Int]]
-
 val rescuedDynamicSlow = Val[Array[Int]] 
 val rescuedDynamicFast = Val[Array[Int]] 
 
@@ -19,7 +17,7 @@ val model =
     import zombies._
     
     val agents = 
-      (0 until nbSlow).map(_ => Human(informProbability = hIp1, runSpeed=hRs1))
+      (0 until nbSlow).map(_ => Human(informProbability = hIp1, runSpeed=hRs1, informed=true))
 
     
     val rng = Random(seed)
@@ -31,18 +29,19 @@ val model =
       humans = 250 - nbSlow,
       agents = agents,
       steps = 500,
-      random = rng)
+      random = rng,
+      humanInformedRatio=0.0)
     
     val rescuedDynamic = result.rescuedDynamic()
     val zombifiedDynamic = result.zombifiedDynamic()
-    val rescuedDynamicSlow = result.filteredRescuedDynamic(runSpeed = Some(_ < 0.3))
-    val rescuedDynamicFast = result.filteredRescuedDynamic(runSpeed = Some(_ >= 0.3))
+    val rescuedDynamicSlow = result.filteredRescuedDynamic(runSpeed = Some(_ <= 0.3))
+    val rescuedDynamicFast = result.filteredRescuedDynamic(runSpeed = Some(_ > 0.3))
   """) set (
     hIp1 := 0.8,
     hRs1 := 0.3,
     hIp2 := 0.09,
     hRs2 := 0.49,
-    nbSlow := 125,
+    nbSlow := 50,
 
     inputs += (seed, hRs1, hIp1, hRs2, hIp2, nbSlow),
     outputs += (rescuedDynamic, zombifiedDynamic, rescuedDynamicSlow, rescuedDynamicFast),
@@ -52,12 +51,16 @@ val model =
 // Define the execution environment
 val env = SLURMEnvironment("xmodel04", "myria.criann.fr", queue = "2tcourt", wallTime = 20 minutes, nTasks = 1, memory = 2500, workDirectory = "/tmp", reservation = "exModelo0624")
 
+/*def median(x: Array[Arrray[Double]]): Array[Double] = {
+    x.transpose.map{_.median}
+}*/
+
 val exploration = 
   Replication(
     evaluation = model on env hook display,
     seed = seed,
     replications = 1
+    //agg = (rescuedDynamic aggregate median)
   )
 
-exploration 
-~~~~
+exploration  
