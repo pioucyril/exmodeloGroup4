@@ -10,6 +10,11 @@ val zombifiedDynamic = Val[Array[Int]]
 val rescuedDynamicSlow = Val[Array[Int]] 
 val rescuedDynamicFast = Val[Array[Int]] 
 
+val rescuedDynamicMed = Val[Array[Double]]
+val rescuedDynamicFastMed = Val[Array[Double]]
+val rescuedDynamicSlowMed = Val[Array[Double]]
+val zombifiedDynamicMed = Val[Array[Double]]
+
 val nbSlow = Val[Int]
 
 val model =
@@ -31,6 +36,9 @@ val model =
       steps = 500,
       random = rng,
       humanInformedRatio=0.0)
+      
+      
+     
     
     val rescuedDynamic = result.rescuedDynamic()
     val zombifiedDynamic = result.zombifiedDynamic()
@@ -51,16 +59,34 @@ val model =
 // Define the execution environment
 val env = SLURMEnvironment("xmodel04", "myria.criann.fr", queue = "2tcourt", wallTime = 20 minutes, nTasks = 1, memory = 2500, workDirectory = "/tmp", reservation = "exModelo0624")
 
-/*def median(x: Array[Arrray[Double]]): Array[Double] = {
-    x.transpose.map{_.median}
+val agg =  
+   ScalaTask("""
+        // Medians
+        def med(x: Array[Array[Int]]) = x.transpose.map(_.map(_.toDouble).median)
+        val rescuedDynamicMed = med(rescuedDynamic)
+        val rescuedDynamicFastMed = med(rescuedDynamicFast)
+        val rescuedDynamicSlowMed = med(rescuedDynamicSlow)
+        val zombifiedDynamicMed = med(zombifiedDynamic)
+    """) set (
+    inputs += (rescuedDynamic.array, zombifiedDynamic.array, rescuedDynamicSlow.array, rescuedDynamicFast.array),
+    outputs += (rescuedDynamicMed, rescuedDynamicFastMed, rescuedDynamicSlowMed, zombifiedDynamicMed)
+    )
+
+
+/*def myMedian(x: Vector[Array[Int]]) = {
+    
+    
+    x.transpose.map(_.map(_.toDouble).median)
+    
 }*/
 
 val exploration = 
   Replication(
     evaluation = model on env hook display,
     seed = seed,
-    replications = 1
-    //agg = (rescuedDynamic aggregate median)
+    replications = 10,
+    aggregation = agg
+    //aggregation = rescuedDynamic.array aggregate myMedian
   )
 
-exploration  
+ exploration
