@@ -90,3 +90,14 @@ val exploration =
   )
 
  exploration
+ 
+// sampling experiment
+
+DirectSampling(
+evaluation = exploration hook (workDirectory / "result01.csv"),
+    sampling = (
+        (nbSlow in (0 to 125 by 25)) x 
+        (hRs1 in (0.1 to 0.4 by 0.1)) x 
+        (hIp1 in (0.1 to 1.0 by 0.1)) 
+    )
+) on env by 100
