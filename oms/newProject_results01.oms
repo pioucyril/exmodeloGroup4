@@ -1,0 +1,106 @@
+//~~~~scala
+val hRs1 = Val[Double]
+val hIp1 = Val[Double]
+val hRs2 = Val[Double]
+val hIp2 = Val[Double]
+
+val seed = Val[Long]
+
+val rescuedDynamic = Val[Array[Int]]
+val zombifiedDynamic = Val[Array[Int]]
+val rescuedDynamicSlow = Val[Array[Int]]
+val rescuedDynamicFast = Val[Array[Int]]
+
+val rescuedDynamicMed = Val[Array[Double]]
+val rescuedDynamicFastMed = Val[Array[Double]]
+val rescuedDynamicSlowMed = Val[Array[Double]]
+val zombifiedDynamicMed = Val[Array[Double]]
+
+val rescuedDynamicMin = Val[Array[Double]]
+val rescuedDynamicMax = Val[Array[Double]]
+
+val nbSlow = Val[Int]
+
+val model =
+  ScalaTask("""
+    import zombies._
+
+    val agents =
+      (0 until nbSlow).map(_ => Human(informProbability = hIp1, runSpeed=hRs1, informed=true))
+
+
+    val rng = Random(seed)
+
+    val result = zombieInvasion(
+      humanInformProbability = hIp2,
+      humanRunSpeed=hRs2,
+      zombies = 4,
+      humans = 250 - nbSlow,
+      agents = agents,
+      steps = 500,
+      random = rng,
+      humanInformedRatio=0.0)
+
+
+
+
+    val rescuedDynamic = result.rescuedDynamic()
+    val zombifiedDynamic = result.zombifiedDynamic()
+    val rescuedDynamicSlow = result.filteredRescuedDynamic(runSpeed = Some(_ <= 0.3))
+    val rescuedDynamicFast = result.filteredRescuedDynamic(runSpeed = Some(_ > 0.3))
+  """) set (
+    hIp1 := 0.8,
+    hRs1 := 0.3,
+    hIp2 := 0.09,
+    hRs2 := 0.49,
+    nbSlow := 50,
+
+    inputs += (seed, hRs1, hIp1, hRs2, hIp2, nbSlow),
+    outputs += (rescuedDynamic, zombifiedDynamic, rescuedDynamicSlow, rescuedDynamicFast),
+    plugins += pluginsOf[zombies.agent.Agent]
+  )
+
+// Define the execution environment
+val env = SLURMEnvironment("xmodel04", "myria.criann.fr", queue = "2tcourt", wallTime = 20 minutes, nTasks = 1, memory = 2500, workDirectory = "/tmp", reservation = "exModelo0624")
+
+val agg =
+   ScalaTask("""
+        // Medians
+        def med(x: Array[Array[Int]]) = x.transpose.map(_.map(_.toDouble).median)
+        val rescuedDynamicMed = med(rescuedDynamic)
+        val rescuedDynamicFastMed = med(rescuedDynamicFast)
+        val rescuedDynamicSlowMed = med(rescuedDynamicSlow)
+        val zombifiedDynamicMed = med(zombifiedDynamic)
+
+        // Min & Max
+        def min(x: Array[Array[Int]]) = x.transpose.map(_.map(_.toDouble).min)
+        val rescuedDynamicMin = min(rescuedDynamic)
+        def max(x: Array[Array[Int]]) = x.transpose.map(_.map(_.toDouble).max)
+        val rescuedDynamicMax = max(rescuedDynamic)
+
+
+    """) set (
+    inputs += (rescuedDynamic.array, zombifiedDynamic.array, rescuedDynamicSlow.array, rescuedDynamicFast.array),
+    outputs += (rescuedDynamicMed, rescuedDynamicFastMed, rescuedDynamicSlowMed, zombifiedDynamicMed,rescuedDynamicMin,rescuedDynamicMax)
+    )
+
+
+val exploration =
+  Replication(
+    evaluation = model ,
+    seed = seed,
+    replications = 10,
+    aggregation = agg
+
+  ) //on env hook (workDirectory / "results_1.csv")
+
+
+ // sampling experiment
+DirectSampling(
+evaluation = exploration hook (workDirectory / "result01.csv"),
+    sampling = (
+        (nbSlow in (0 to 125 by 25)) x
+        (hRs1 in (0.1 to 0.4 by 0.1)) x
+        (hIp1 in (0.1 to 1.0 by 0.1))
+    )
+) on env by 100
